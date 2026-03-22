@@ -1,0 +1,446 @@
+from tmnf_parser import LocalStrings
+from .GameIDs import ChunkId, NodeId
+from .Lzo.Lzo import LZO
+from .Containers import Chunk, Node, Array, List, Vector2, Vector3, Color
+
+import struct
+import logging
+import builtins
+
+
+class GbxWriter:
+    def __init__(self):
+        self.data = bytearray()
+        self.seen_lookback = False
+        self.stored_nodes = []
+        self.stored_strings = []
+        self.current_chunk: Chunk
+        self.frozen_chunks: list[Chunk] = []
+
+    def _get_item_by_name(self, name, is_ref: bool):
+        if is_ref:
+            return self.current_chunk.data[name]
+        return name
+
+    def bool(self, name: str | bool, is_ref: bool = True) -> bool:
+        """
+        Writes a boolean to the buffer (4 bytes)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the boolean that got written
+        """
+        val = self._get_item_by_name(name, is_ref)
+        return bool(self.uint32(int(val), is_ref=False))
+
+    def byte(self, name: str | int, is_ref: builtins.bool = True) -> int:
+        """
+        Writes a single byte to the buffer
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the byte that got written
+        """
+        val = int(self._get_item_by_name(name, is_ref))
+        self.data.extend(bytes([val]))
+        return val
+
+    def customArray(
+        self, size: int, arg_list: list, name: str | Array, is_ref: builtins.bool = True
+    ):
+        """
+        Writes an array to the buffer
+        :param size: length of the array
+        :param arg_list: list of tuples (function, name) to specify what's inside each cell
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        """
+        array = self._get_item_by_name(name, is_ref)
+
+        if not isinstance(array, Array):
+            raise Exception
+        for i in range(size):
+            d = array.data[i]
+            for f, el_name in arg_list:
+                f(self)(d[el_name], is_ref=False)
+                
+    def directNodeRef(self, name:str):
+        pass  # TODO
+
+    def customList(
+        self, arg_list: list, name: str | List, is_ref: builtins.bool = True
+    ):
+        """
+        Writes a list to the buffer
+        :param arg_list: list of tuples (function, name) to specify what's inside each cell
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        """
+        clist = self._get_item_by_name(name, is_ref)
+        if not isinstance(clist, List):
+            raise Exception
+        self.uint32(clist.size, is_ref=False)
+        for i in range(clist.size):
+            d = clist.data[i]
+            for f, el_name in arg_list:
+                f(self)(d[el_name], is_ref=False)
+
+    def chunkId(self, name: str | ChunkId, is_ref: builtins.bool = True) -> ChunkId:
+        """
+        Writes a chunkId to the buffer (4 bytes in hexadecimal)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the chunkId that got written
+        """
+        val = self._get_item_by_name(name, is_ref)
+
+        if not isinstance(val, ChunkId):
+            logging.error(f"Provided val {val} is not a correct chunkId")
+            return ChunkId.Unassigned
+        self.data += struct.pack("I", val.value)
+        return val
+
+    def color(self, name: str, is_ref: builtins.bool = True):
+        """
+        Writes a color to the buffer
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        """
+        c = self._get_item_by_name(name, is_ref)
+        if not isinstance(c, Color):
+            raise Exception
+        self.float(c.r, is_ref=False)
+        self.float(c.g, is_ref=False)
+        self.float(c.b, is_ref=False)
+
+    def nodeId(self, name: str | NodeId, is_ref: builtins.bool = True) -> NodeId:
+        """
+        Writes a nodeId to the buffer (4 bytes in hexadecimal)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the nodeId that got written
+        """
+        val = self._get_item_by_name(name, is_ref)
+
+        if not isinstance(val, NodeId):
+            logging.error(f"Provided val {val} is not a correct nodeId")
+            return NodeId.Unassigned
+        self.data += struct.pack("I", val.value)
+        return val
+
+    def fileRef(self, name: str):
+        """
+        Writes a file reference to the buffer
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        """
+        file = self.current_chunk.data[name]
+        int(self.byte(file.version, is_ref=False))
+        if file.version >= 3:
+            self.bytes(32, name=file.checksum, is_ref=False)
+        self.string(file.path, is_ref=False)
+        if file.path and file.version >= 1:
+            self.string(file.locator_url, is_ref=False)
+
+    def float(self, name: str | float, is_ref: builtins.bool = True):
+        """
+        Writes a float to the buffer (4 bytes)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        """
+        val = self._get_item_by_name(name, is_ref)
+        self.data.extend(struct.pack("f", val))
+
+    def int16(self, name: str | int, is_ref: builtins.bool = True) -> int:
+        """
+        Writes an int16 to the buffer (2 bytes)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the int16 that got written
+        """
+        val = int(self._get_item_by_name(name, is_ref))
+        self.data.extend(struct.pack("h", val))
+        return val
+
+    def int32(self, name: str | int, is_ref: builtins.bool = True) -> int:
+        """
+        Writes an int32 to the buffer (4 bytes)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the int32 that got written
+        """
+        val = int(self._get_item_by_name(name, is_ref))
+        self.data.extend(struct.pack("i", val))
+        return val
+
+    def lookbackString(self, name: str, is_ref: builtins.bool = True, is_local=True):
+        """
+        Writes a string with lookback format to the buffer (4 bytes)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        """
+        val = self._get_item_by_name(name, is_ref)
+        if not self.seen_lookback:
+            self.uint32(3, is_ref=False)
+            self.seen_lookback = True
+        if is_local or val in LocalStrings.local_strings:
+            flag = 1 << 30
+        else:
+            flag = 1 << 31
+        if val == "":
+            self.int32(-1, is_ref=False)
+        elif val not in self.stored_strings:
+            self.uint32(flag, is_ref=False)
+            self.string(val, is_ref=False)
+            self.stored_strings.append(val)
+        else:
+            index: builtins.int = self.stored_strings.index(val) + 1
+            self.uint32((1 << 30) + index, is_ref=False)
+
+    def nodeRef(self, name: str):
+        """
+        Writes a node reference to the buffer
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        """
+        node = self.current_chunk.data[name]
+        if node is not None and node.id != NodeId.Empty:
+            chunk = self.current_chunk
+            if node in self.stored_nodes:
+                index = self.stored_nodes.index(node) + 1
+                self.int32(index, is_ref=False)
+            else:
+                self.stored_nodes.append(node)
+                index = len(self.stored_nodes)
+                self.int32(index, is_ref=False)
+                self.nodeId(node.id, is_ref=False)
+                node_data = self.writeNode(node)
+                self.data.extend(node_data)
+            self.current_chunk = chunk
+        else:
+            self.int32(-1, is_ref=False)
+
+    def bytes(
+        self, size: int, name: str | bytes, is_ref: builtins.bool = True
+    ) -> bytes:
+        """
+        Writes some bytes to the buffer (4 bytes)
+        :param size: unused, kept for compatibility with reading
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the bytes that got written
+        """
+        val = self._get_item_by_name(name, is_ref)
+        if not isinstance(val, bytes):
+            raise Exception
+        self.data.extend(val)
+        return val
+
+    def writeNode(self, node: Node) -> builtins.bytes:
+        """
+        Writes a node to the buffer
+        :param node: the node that must be written
+        :return: the bytes that got written in the buffer
+        """
+        pos_before = len(self.data)
+        from . import BlockImporter
+
+        for chunk in node.chunk_list:
+            self.chunkId(chunk.id, is_ref=False)
+
+            if BlockImporter.is_skippable(chunk.id):
+                if chunk.skipped:
+                    logging.info(f"Writing skipped chunk {chunk.id}")
+                    chunk_data = chunk.skipped
+                else:
+                    logging.info(f"Writing chunk {chunk.id}")
+                    chunk_data = self.writeChunk(chunk)
+                self.bytes(4, b"PIKS", is_ref=False)
+                self.uint32(len(chunk_data), is_ref=False)
+                self.data.extend(chunk_data)
+            elif BlockImporter.is_known(chunk.id):
+                logging.info(f"Writing chunk {chunk.id}")
+                chunk_data = self.writeChunk(chunk)
+                self.data.extend(chunk_data)
+            else:
+                logging.warning(f"Unknown chunk {chunk.id}")
+
+        self.chunkId(ChunkId.Facade, is_ref=False)
+
+        node_data = self.data[pos_before:]
+        self.data = self.data[:pos_before]
+        return bytes(node_data)
+
+    def resetLookbackState(self):
+        """
+        Resets the state of the lookback string format. Needed after each header chunk
+        """
+        self.seen_lookback = False
+        self.stored_strings = []
+
+    def saveToFile(self, file: str):
+        # TODO : add checks, return success
+        """
+        Write the current buffer to a file
+        :param file: the file where the data needs to be written
+        """
+        f = open(file, "wb+")
+        f.write(bytes(self.data))
+        f.close()
+
+    def string(self, name: str, is_ref: builtins.bool = True) -> builtins.str:
+        """
+        Writes a string to the buffer (size + data)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the bytes that got written
+        """
+        val = self._get_item_by_name(name, is_ref)
+        data = bytes(val, "utf-8", errors="replace")
+
+        self.uint32(len(data), is_ref=False)
+        string = struct.pack(f"{len(data)}s", data)
+        self.data.extend(string)
+        return val
+    
+    
+    def uint8(self, name: str | int, is_ref: builtins.bool = True) -> int:
+        """
+        Writes an unsigned int to the buffer (2 bytes)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the uint8 that got written
+        """
+        val = int(self._get_item_by_name(name, is_ref))
+        self.data += struct.pack("B", val)
+        return val
+
+    def uint16(self, name: str | int, is_ref: builtins.bool = True) -> int:
+        """
+        Writes an unsigned int to the buffer (2 bytes)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the uint16 that got written
+        """
+        val = int(self._get_item_by_name(name, is_ref))
+        self.data += struct.pack("H", val)
+        return val
+
+    def uint32(self, name: str | int, is_ref: builtins.bool = True) -> int:
+        """
+        Writes an unsigned int to the buffer (4 bytes)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        :return: the uint32 that got written
+        """
+        val = int(self._get_item_by_name(name, is_ref))
+        self.data += struct.pack("I", val)
+        return val
+
+    def vec2(self, name: str | Vector2, is_ref: builtins.bool = True):
+        """
+        Writes a 2D vector to the buffer (2 * 4 bytes)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        """
+        val = self._get_item_by_name(name, is_ref)
+        f1, f2 = val[0], val[1]
+        self.float(f1, is_ref=False)
+        self.float(f2, is_ref=False)
+
+    def vec3(self, name: str | Vector3, is_ref: builtins.bool = True):
+        """
+        Writes a 3D vector to the buffer (3 * 4 bytes)
+        :param name: name of the object inside current chunk. Can be an object if is_ref is False
+        :param is_ref: whether name is a reference inside current chunk memory or not (default : true)
+        """
+        val = self._get_item_by_name(name, is_ref)
+        if not isinstance(val, Vector3):
+            raise Exception
+        f1, f2, f3 = val[0], val[1], val[2]
+        self.float(f1, is_ref=False)
+        self.float(f2, is_ref=False)
+        self.float(f3, is_ref=False)
+
+    def writeChunk(self, chunk: Chunk) -> builtins.bytes:
+        """
+        Writes a chunk to the buffer
+        :param chunk: the chunk that must be written
+        :return: the bytes that got written
+        """
+        from . import BlockImporter
+
+        self.current_chunk = chunk
+        pos_before = len(self.data)
+        if BlockImporter.is_known(chunk.id):
+            BlockImporter.chunkLink[chunk.id.value](self)
+        chunk_data = self.data[pos_before:]
+        self.data = self.data[:pos_before]
+        return bytes(chunk_data)
+
+    def writeHeader(self, gbx):
+        """
+        Write the header of the file to the buffer, including the header chunks
+        :param gbx: the gbx data from which the header data is taken
+        """
+        self.bytes(3, b"GBX", is_ref=False)
+
+        version = self.int16(6, is_ref=False)
+        self.bytes(3, b"BUC", is_ref=False)
+        if version >= 4:
+            self.byte(82, is_ref=False)
+
+        if version >= 3:
+            self.nodeId(gbx.id, is_ref=False)
+
+        if version >= 6 and not gbx.header_chunk_list:
+            self.uint32(0, is_ref=False)
+        elif version >= 6:
+            chunk_datas = []
+            for chunk in gbx.header_chunk_list:
+                logging.info(f"Writing chunk {chunk.id}")
+                self.resetLookbackState()
+                chunk_data = self.writeChunk(chunk)
+                chunk_datas.append(chunk_data)
+
+            user_data_size = 4 + sum(
+                len(c) + 8 for c in chunk_datas
+            )  # Chunk + id + size
+            self.uint32(user_data_size, is_ref=False)
+            self.uint32(len(chunk_datas), is_ref=False)
+
+            for chunk, chunk_data in zip(gbx.header_chunk_list, chunk_datas):
+                self.chunkId(chunk.id, is_ref=False)
+                from tmnf_parser.BlockImporter import is_skippable
+
+                if is_skippable(chunk.id):
+                    self.uint32(len(chunk_data) ^ 1 << 31, is_ref=False)
+                else:
+                    self.uint32(len(chunk_data), is_ref=False)
+
+            for chunk_data in chunk_datas:
+                self.data.extend(chunk_data)
+
+    def writeBody(self, gbx):
+        """
+        Write the body of the file to the buffer, which consists of a compressed main node
+        :param gbx: the gbx data from which the body data is taken
+        """
+        self.resetLookbackState()
+
+        if gbx.main_node is None:
+            return
+
+        node_data = self.writeNode(gbx.main_node)
+
+        self.uint32(len(self.stored_nodes) + 1, is_ref=False)  # Number of nodes
+        self.uint32(0, is_ref=False)  # Number of external nodes
+
+        comp_data = LZO().compress(node_data)
+        self.uint32(len(node_data), is_ref=False)
+        self.uint32(len(comp_data), is_ref=False)
+        self.data.extend(comp_data)
+
+    def writeAll(self, gbx):
+        """
+        Write the whole gbx data to the buffer, header and body
+        :param gbx: the gbx data from which the header and body is taken
+        """
+        self.writeHeader(gbx)
+        self.writeBody(gbx)

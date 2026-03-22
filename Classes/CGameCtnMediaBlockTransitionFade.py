@@ -1,0 +1,10 @@
+"""CGameCtnMediaBlockTransitionFade 030AB"""
+
+
+def Chunk000(bp):
+    numKeys = bp.uint32("numKeys")
+    for i in range(numKeys):
+        bp.float(f"timeStamp {i}")
+        bp.float(f"opacity {i}")
+    bp.vec3("transitionColor")
+    bp.float("u1")

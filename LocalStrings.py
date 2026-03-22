@@ -1,0 +1,1 @@
+local_strings: set[str] =  {"Nadeo"}
