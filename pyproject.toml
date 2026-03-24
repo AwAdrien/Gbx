@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gbx"
+version = "0.0.0"
+description = "Small self contained python library to interact with TMNF Gbx files."
+readme = "README.md"
+authors = [{ name = "Adrien", email = "obrecht.adrien@proton.me" }]
+license = "GPL-3.0-or-later"
+keywords = ["gbx", "tmnf", "trackmania"]
+dependencies = [
+    "numpy",
+]
+
+requires-python = ">=3.9"
+
+[project.urls]
+Homepage = "https://github.com/AwAdrien/Gbx"

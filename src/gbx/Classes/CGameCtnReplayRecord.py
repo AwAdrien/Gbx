@@ -1,6 +1,6 @@
 """CGameCtnReplayRecord 03093"""
 
-from tmnf_parser import GbxReader
+import gbx.GbxReader as GbxReader
 
 
 def Chunk000(bp):

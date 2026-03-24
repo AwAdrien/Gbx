@@ -1,9 +1,9 @@
 from hashlib import md5
-from tmnf_parser import LocalStrings
 from .GameIDs import ChunkId, NodeId
 from .Containers import Array, Quat, Vector2, Vector3, List, Node, Chunk, File, Color
 from .Gbx import Gbx
 from .Lzo.Lzo import LZO
+from .GameIDs import *
 
 
 import logging
@@ -11,9 +11,6 @@ import os
 import struct
 import builtins
 import math
-
-from tmnf_parser import GameIDs
-
 
 class GbxReader:
     """
@@ -115,8 +112,8 @@ class GbxReader:
         """
         val = int(self.bytes(4, "I"))
 
-        if val in GameIDs.chunk_id_map:
-            val = GameIDs.chunk_id_map[val]
+        if val in chunk_id_map:
+            val = chunk_id_map[val]
 
         if not ChunkId.intIsChunkId(val):
             logging.error(f"Unknown chunk {hex(val)}")
@@ -265,8 +262,8 @@ class GbxReader:
         """
         val = int(self.bytes(4, "I"))
 
-        if val in GameIDs.node_id_map:
-            val = GameIDs.node_id_map[val]
+        if val in node_id_map:
+            val = node_id_map[val]
 
         if not NodeId.intIsNodeId(val):
             logging.error(f"Unknown node id {hex(val)}")

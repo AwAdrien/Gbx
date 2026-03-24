@@ -1,8 +1,7 @@
 """CGameGhost 0303F"""
 
-from tmnf_parser import GbxReader
+from gbx import GbxReader
 import zlib
-import math
 
 SAMPLE_SIZE = 61
 

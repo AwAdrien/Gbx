@@ -1,4 +1,3 @@
-from tmnf_parser import LocalStrings
 from .GameIDs import ChunkId, NodeId
 from .Lzo.Lzo import LZO
 from .Containers import Chunk, Node, Array, List, Vector2, Vector3, Color

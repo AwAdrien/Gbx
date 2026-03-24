@@ -1,6 +1,5 @@
-from tmnf_parser.Classes import CPlugMaterialCustom
-from .Classes import *
-from .GameIDs import ChunkId
+from gbx.Classes import *
+from gbx.GameIDs import ChunkId
 
 chunkLink = {
     0x27133172: lambda x: x.uint32("u1"),  # TODO unlimiter fix

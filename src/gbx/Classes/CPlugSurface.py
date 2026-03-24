@@ -1,9 +1,6 @@
 """CPlugSurface 0900C"""
 
 
-from zmq import has
-
-
 def Chunk000(bp):
     surfaceGeometry = bp.nodeRef("surfaceGeometry")
     num_materials = bp.uint32("numMaterials")
