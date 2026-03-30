@@ -687,7 +687,7 @@ class GbxReader:
 
             if comp_data_size <= 0:
                 return
-
+            logging.info("Decompressing")
             self.data = LZO().decompress(comp_data, data_size)
         else:
             self.data = self.data[self.pos :]

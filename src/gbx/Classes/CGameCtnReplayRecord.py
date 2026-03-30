@@ -1,7 +1,6 @@
 """CGameCtnReplayRecord 03093"""
 
-import gbx.GbxReader as GbxReader
-
+import gbx
 
 def Chunk000(bp):
     version = bp.uint32("version")
@@ -25,10 +24,10 @@ def Chunk001(bp):
 def Chunk002(bp) -> None:
     GBXSize = bp.uint32("GbxSize")
     data = bp.bytes(GBXSize, name="gbxData")
-    if isinstance(bp, GbxReader.GbxReader):
-        track_reader = GbxReader.GbxReader(data)
-        track: GbxReader.Gbx = track_reader.readAll()
-        # bp.current_chunk.data["Track"] = track
+    # if isinstance(bp, gbx.GbxReader):
+    #     track_reader = gbx.GbxReader(data)
+    #     track: gbx.Gbx = track_reader.readAll()
+    #     # bp.current_chunk.data["Track"] = track
 
 
 def Chunk007(bp):

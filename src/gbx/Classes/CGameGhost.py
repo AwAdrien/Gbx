@@ -1,13 +1,13 @@
 """CGameGhost 0303F"""
 
-from gbx import GbxReader
 import zlib
+import gbx
 
 SAMPLE_SIZE = 61
 
 
 def Chunk005(bp):
-    if isinstance(bp, GbxReader.GbxReader):
+    if isinstance(bp, gbx.GbxReader):
         readChunk005(bp)
     else:
         writeChunk005(bp)
@@ -19,7 +19,7 @@ def readChunk005(bp):
     comp_data = bp.bytes(comp_size, name="compData")
 
     data = zlib.decompress(comp_data, 0, uncomp_size)
-    gr = GbxReader.GbxReader(data)
+    gr = gbx.GbxReader(data)
     gr.current_chunk.id = gr.chunkId()  # TODO
     skip_list: bool = gr.bool("skipList")
     gr.uint32("U1")
@@ -87,6 +87,8 @@ def readChunk005(bp):
         gr.uint32("offset")
         if num_samples > 1:
             size_per_sample = gr.int32("sizePerSample")
+            if size_per_sample == -1:
+                return
             # TODO investigate
             assert (
                 size_per_sample == SAMPLE_SIZE

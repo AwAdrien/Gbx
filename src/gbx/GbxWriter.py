@@ -1,6 +1,7 @@
 from .GameIDs import ChunkId, NodeId
 from .Lzo.Lzo import LZO
 from .Containers import Chunk, Node, Array, List, Vector2, Vector3, Color
+from .LocalStrings import local_strings
 
 import struct
 import logging
@@ -179,7 +180,7 @@ class GbxWriter:
         if not self.seen_lookback:
             self.uint32(3, is_ref=False)
             self.seen_lookback = True
-        if is_local or val in LocalStrings.local_strings:
+        if is_local or val in local_strings:
             flag = 1 << 30
         else:
             flag = 1 << 31
@@ -228,6 +229,7 @@ class GbxWriter:
         val = self._get_item_by_name(name, is_ref)
         if not isinstance(val, bytes):
             raise Exception
+        print(str(val)[:1000])
         self.data.extend(val)
         return val
 
@@ -406,7 +408,7 @@ class GbxWriter:
 
             for chunk, chunk_data in zip(gbx.header_chunk_list, chunk_datas):
                 self.chunkId(chunk.id, is_ref=False)
-                from tmnf_parser.BlockImporter import is_skippable
+                from gbx.BlockImporter import is_skippable
 
                 if is_skippable(chunk.id):
                     self.uint32(len(chunk_data) ^ 1 << 31, is_ref=False)
